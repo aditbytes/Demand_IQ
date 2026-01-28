@@ -5,28 +5,17 @@
 Before starting, ensure you have:
 
 - [ ] Python 3.9 or higher installed
-- [ ] PostgreSQL 12 or higher installed and running
 - [ ] At least 4GB RAM available
 - [ ] 2GB free disk space for data
 - [ ] Git installed (optional, for version control)
 
 ## Step-by-Step Setup
 
-### 1. Create PostgreSQL Database
-
-```bash
-# Create database
-createdb demandiq
-
-# Verify connection
-psql -d demandiq -c "SELECT version();"
-```
-
-### 2. Set Up Python Environment
+### 1. Set Up Python Environment
 
 ```bash
 # Navigate to project directory
-cd /Users/aditya/CODING/demand_IQ
+cd /Volumes/Aditya\ ssd/Demand_IQ
 
 # Create virtual environment
 python -m venv venv
@@ -40,7 +29,7 @@ venv\Scripts\activate  # On Windows
 which python
 ```
 
-### 3. Install Dependencies
+### 2. Install Dependencies
 
 ```bash
 # Install all required packages
@@ -50,45 +39,15 @@ pip install -r requirements.txt
 python -c "import pandas, fastapi, streamlit, prophet, xgboost; print('✓ All packages installed')"
 ```
 
-### 4. Configure Environment Variables
+### 3. Configure Environment Variables (Optional)
 
 ```bash
-# Copy template
+# Copy template (if using API keys or external services)
 cp .env.example .env
 
-# Edit .env file with your database credentials
-# Change DB_PASSWORD to your PostgreSQL password
+# Edit .env file as needed
 nano .env
 ```
-
-Example `.env`:
-```
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=demandiq
-DB_USER=postgres
-DB_PASSWORD=your_actual_password
-```
-
-### 5. Initialize Database Schema
-
-```bash
-# Run schema file
-psql -d demandiq -f db/schema.sql
-
-# Verify tables created
-psql -d demandiq -c "\dt"
-```
-
-You should see 5 tables: `sales`, `features`, `forecast`, `inventory`, `reorders`
-
-### 6. Test Database Connection
-
-```bash
-python -c "from db.db_utils import test_connection; test_connection()"
-```
-
-Expected output: `✓ Successfully connected to database: demandiq`
 
 ## Running the Full Pipeline
 
@@ -104,7 +63,7 @@ chmod +x run_pipeline.sh
 
 This will:
 1. Download M5 dataset
-2. Clean and process data
+2. Clean and process data (saved to CSV)
 3. Engineer features
 4. Generate sample inventory
 5. Train Prophet and XGBoost models
@@ -119,21 +78,18 @@ This will:
 # Step 1: Data ingestion
 python pipelines/ingest.py
 
-# Step 2: Data cleaning
+# Step 2: Data cleaning (saves to data/processed/)
 python pipelines/clean.py
 
 # Step 3: Feature engineering
 python pipelines/feature_engineering.py
 
-# Step 4: Generate sample inventory
-python db/generate_sample_data.py
-
-# Step 5: Train models
+# Step 4: Train models
 python models/train_prophet.py --subset 20
 python models/train_xgboost.py --subset 20
 python models/evaluate.py
 
-# Step 6: Generate recommendations
+# Step 5: Generate recommendations
 python inventory/safety_stock.py
 python inventory/reorder.py
 ```
@@ -200,13 +156,6 @@ curl http://localhost:8000/alerts?risk_level=HIGH
 
 ## Troubleshooting
 
-### Issue: Database connection failed
-
-**Solution:**
-- Verify PostgreSQL is running: `pg_isready`
-- Check credentials in `.env` file
-- Ensure database exists: `psql -l | grep demandiq`
-
 ### Issue: ModuleNotFoundError
 
 **Solution:**
@@ -228,7 +177,7 @@ conda install -c conda-forge prophet
 
 **Solution:**
 - Verify pipelines ran successfully
-- Check database: `psql -d demandiq -c "SELECT COUNT(*) FROM sales;"`
+- Check CSV files exist in `data/processed/` folder
 - Re-run pipelines if needed
 
 ### Issue: MLflow tracking not working
@@ -254,7 +203,6 @@ For production deployment:
 
 - [ ] Use Docker containers
 - [ ] Set up Airflow for daily pipeline runs
-- [ ] Deploy PostgreSQL to managed service (RDS, Cloud SQL)
 - [ ] Deploy API to cloud (AWS ECS, GCP Cloud Run)
 - [ ] Add authentication to API endpoints
 - [ ] Set up monitoring and alerts

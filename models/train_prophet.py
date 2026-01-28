@@ -7,50 +7,38 @@ import numpy as np
 from pathlib import Path
 from prophet import Prophet
 import pickle
-import sys
-sys.path.append(str(Path(__file__).parent.parent))
-from db.db_utils import get_engine
 import mlflow
 import mlflow.sklearn
 
-def load_training_data(store_id=None, sku=None, limit_skus=None):
-    """Load data for model training"""
-    engine = get_engine()
+
+def load_training_data(limit_skus=None):
+    """Load data for model training from CSV"""
+    print("Loading sales data from CSV...")
     
-    query = "SELECT date, store_id, sku, units FROM sales ORDER BY date"
+    csv_path = Path('data/processed/sales_cleaned.csv')
     
-    if store_id and sku:
-        query = f"""
-        SELECT date, store_id, sku, units 
-        FROM sales 
-        WHERE store_id = '{store_id}' AND sku = '{sku}'
-        ORDER BY date
-        """
-    elif limit_skus:
-        # Get top N SKUs by total volume for faster training
-        query = f"""
-        WITH top_skus AS (
-            SELECT store_id, sku
-            FROM sales
-            GROUP BY store_id, sku
-            ORDER BY SUM(units) DESC
-            LIMIT {limit_skus}
-        )
-        SELECT s.date, s.store_id, s.sku, s.units
-        FROM sales s
-        INNER JOIN top_skus t ON s.store_id = t.store_id AND s.sku = t.sku
-        ORDER BY s.date
-        """
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Sales data not found at {csv_path}. Run clean.py first.")
     
-    df = pd.read_sql(query, engine)
+    df = pd.read_csv(csv_path)
     df['date'] = pd.to_datetime(df['date'])
+    
+    if limit_skus:
+        # Get top N SKUs by total volume for faster training
+        top_skus = (df.groupby(['store_id', 'sku'])['units'].sum()
+                    .reset_index()
+                    .nlargest(limit_skus, 'units')[['store_id', 'sku']])
+        df = df.merge(top_skus, on=['store_id', 'sku'], how='inner')
+    
+    df = df.sort_values('date')
+    print(f"  Loaded {len(df):,} sales records")
     
     return df
 
 def train_prophet_model(df, store_id, sku):
     """Train Prophet model for a single SKU"""
     # Prepare data in Prophet format
-    prophet_df = df[df['store_id'] == store_id][df['sku'] == sku][['date', 'units']].copy()
+    prophet_df = df[(df['store_id'] == store_id) & (df['sku'] == sku)][['date', 'units']].copy()
     prophet_df.columns = ['ds', 'y']
     
     if len(prophet_df) < 30:  # Skip if insufficient data
@@ -152,7 +140,8 @@ def train_all_models(limit_skus=10):
     print("\n" + "=" * 60)
     print(f"✓ Prophet training complete!")
     print(f"  Trained {len(results)} models")
-    print(f"  Average MAE: {results_df['mae'].mean():.2f}")
+    if len(results) > 0:
+        print(f"  Average MAE: {results_df['mae'].mean():.2f}")
     print(f"  Results saved to: {results_path}")
     print("=" * 60)
 

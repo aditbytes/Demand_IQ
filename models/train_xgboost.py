@@ -9,35 +9,31 @@ import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import pickle
-import sys
-sys.path.append(str(Path(__file__).parent.parent))
-from db.db_utils import get_engine
 import mlflow
 import mlflow.xgboost
 
+
 def load_features(limit_skus=None):
-    """Load engineered features from database"""
-    engine = get_engine()
+    """Load engineered features from CSV"""
+    print("Loading features from CSV...")
+    
+    csv_path = Path('data/features/features.csv')
+    
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Features not found at {csv_path}. Run feature_engineering.py first.")
+    
+    df = pd.read_csv(csv_path)
+    df['date'] = pd.to_datetime(df['date'])
     
     if limit_skus:
-        query = f"""
-        WITH top_skus AS (
-            SELECT store_id, sku
-            FROM sales
-            GROUP BY store_id, sku
-            ORDER BY SUM(units) DESC
-            LIMIT {limit_skus}
-        )
-        SELECT f.*
-        FROM features f
-        INNER JOIN top_skus t ON f.store_id = t.store_id AND f.sku = t.sku
-        ORDER BY f.date
-        """
-    else:
-        query = "SELECT * FROM features ORDER BY date"
+        # Get top N SKUs by total volume for faster training
+        top_skus = (df.groupby(['store_id', 'sku'])['units'].sum()
+                    .reset_index()
+                    .nlargest(limit_skus, 'units')[['store_id', 'sku']])
+        df = df.merge(top_skus, on=['store_id', 'sku'], how='inner')
     
-    df = pd.read_sql(query, engine)
-    df['date'] = pd.to_datetime(df['date'])
+    df = df.sort_values('date')
+    print(f"  Loaded {len(df):,} feature records")
     
     return df
 
@@ -97,7 +93,6 @@ def train_xgboost_model(X_train, X_test, y_train, y_test):
     model.fit(
         X_train, y_train,
         eval_set=[(X_test, y_test)],
-        early_stopping_rounds=10,
         verbose=False
     )
     
@@ -182,8 +177,9 @@ def train_all_models(limit_skus=10):
     print("\n" + "=" * 60)
     print(f"✓ XGBoost training complete!")
     print(f"  Trained {len(results)} models")
-    print(f"  Average MAE: {results_df['mae'].mean():.2f}")
-    print(f"  Average RMSE: {results_df['rmse'].mean():.2f}")
+    if len(results) > 0:
+        print(f"  Average MAE: {results_df['mae'].mean():.2f}")
+        print(f"  Average RMSE: {results_df['rmse'].mean():.2f}")
     print(f"  Results saved to: {results_path}")
     print("=" * 60)
 

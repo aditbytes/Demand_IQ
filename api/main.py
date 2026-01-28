@@ -8,10 +8,14 @@ from pydantic import BaseModel
 from typing import List, Optional
 import pandas as pd
 from datetime import date, datetime
-import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent))
-from db.db_utils import get_engine
+
+
+# Data file paths
+DATA_DIR = Path(__file__).parent.parent / 'data'
+SALES_CSV = DATA_DIR / 'processed' / 'sales_cleaned.csv'
+FORECAST_CSV = DATA_DIR / 'forecast.csv'
+REORDERS_CSV = DATA_DIR / 'reorders.csv'
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -57,6 +61,29 @@ class AlertItem(BaseModel):
     reorder_qty: int
     risk_level: str
 
+# Data loading functions
+def load_forecast_data():
+    """Load forecast data from CSV"""
+    if FORECAST_CSV.exists():
+        df = pd.read_csv(FORECAST_CSV)
+        df['forecast_date'] = pd.to_datetime(df['forecast_date'])
+        return df
+    return pd.DataFrame()
+
+def load_reorders_data():
+    """Load reorder recommendations from CSV"""
+    if REORDERS_CSV.exists():
+        return pd.read_csv(REORDERS_CSV)
+    return pd.DataFrame()
+
+def load_sales_data():
+    """Load sales data from CSV"""
+    if SALES_CSV.exists():
+        df = pd.read_csv(SALES_CSV)
+        df['date'] = pd.to_datetime(df['date'])
+        return df
+    return pd.DataFrame()
+
 # Endpoints
 @app.get("/")
 def root():
@@ -84,21 +111,22 @@ def get_forecast(store_id: str, sku: str, days: int = 7):
     Returns:
         Forecast for next N days
     """
-    engine = get_engine()
-    
-    query = f"""
-    SELECT forecast_date, predicted_demand
-    FROM forecast
-    WHERE store_id = '{store_id}' 
-    AND sku = '{sku}'
-    AND forecast_date >= CURRENT_DATE
-    AND forecast_date < CURRENT_DATE + INTERVAL '{days} days'
-    ORDER BY forecast_date
-    """
-    
-    df = pd.read_sql(query, engine)
+    df = load_forecast_data()
     
     if len(df) == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Forecast data not available. Run the forecasting pipeline first."
+        )
+    
+    # Filter for store and SKU
+    df_filtered = df[(df['store_id'] == store_id) & (df['sku'] == sku)]
+    
+    # Filter for future dates
+    today = pd.Timestamp.now().normalize()
+    df_filtered = df_filtered[df_filtered['forecast_date'] >= today].head(days)
+    
+    if len(df_filtered) == 0:
         raise HTTPException(
             status_code=404,
             detail=f"No forecast found for store_id={store_id}, sku={sku}"
@@ -109,7 +137,7 @@ def get_forecast(store_id: str, sku: str, days: int = 7):
             date=row['forecast_date'].strftime('%Y-%m-%d'),
             predicted_demand=float(row['predicted_demand'])
         )
-        for _, row in df.iterrows()
+        for _, row in df_filtered.iterrows()
     ]
     
     return ForecastResponse(
@@ -131,23 +159,24 @@ def get_reorder(store_id: str, sku: str):
     Returns:
         Reorder quantity and risk level
     """
-    engine = get_engine()
-    
-    query = f"""
-    SELECT current_stock, forecasted_demand, safety_stock, order_qty, risk_level
-    FROM reorders
-    WHERE store_id = '{store_id}' AND sku = '{sku}'
-    """
-    
-    df = pd.read_sql(query, engine)
+    df = load_reorders_data()
     
     if len(df) == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Reorder data not available. Run the reorder pipeline first."
+        )
+    
+    # Filter for store and SKU
+    df_filtered = df[(df['store_id'] == store_id) & (df['sku'] == sku)]
+    
+    if len(df_filtered) == 0:
         raise HTTPException(
             status_code=404,
             detail=f"No reorder data found for store_id={store_id}, sku={sku}"
         )
     
-    row = df.iloc[0]
+    row = df_filtered.iloc[0]
     
     return ReorderResponse(
         store_id=store_id,
@@ -174,23 +203,26 @@ def get_alerts(
     Returns:
         List of products at risk
     """
-    engine = get_engine()
+    df = load_reorders_data()
     
-    query = """
-    SELECT store_id, sku, current_stock, forecasted_demand, order_qty, risk_level
-    FROM reorders
-    WHERE 1=1
-    """
+    if len(df) == 0:
+        return []
     
+    # Filter by risk level
     if risk_level:
-        query += f" AND risk_level = '{risk_level}'"
+        df = df[df['risk_level'] == risk_level]
     else:
         # Default: show MED and HIGH risk items
-        query += " AND risk_level IN ('MED', 'HIGH')"
+        df = df[df['risk_level'].isin(['MED', 'HIGH'])]
     
-    query += f" ORDER BY CASE risk_level WHEN 'HIGH' THEN 1 WHEN 'MED' THEN 2 ELSE 3 END, order_qty DESC LIMIT {limit}"
+    # Sort by risk priority
+    risk_order = {'HIGH': 0, 'MED': 1, 'LOW': 2}
+    df['_order'] = df['risk_level'].map(risk_order)
+    df = df.sort_values(['_order', 'order_qty'], ascending=[True, False])
+    df = df.drop('_order', axis=1)
     
-    df = pd.read_sql(query, engine)
+    # Limit results
+    df = df.head(limit)
     
     alerts = [
         AlertItem(
@@ -209,13 +241,20 @@ def get_alerts(
 @app.get("/health")
 def health_check():
     """Health check endpoint"""
-    from db.db_utils import test_connection
+    # Check if data files exist
+    sales_ok = SALES_CSV.exists()
+    forecast_ok = FORECAST_CSV.exists()
+    reorders_ok = REORDERS_CSV.exists()
     
-    db_status = test_connection()
+    status = "healthy" if (sales_ok or reorders_ok) else "degraded"
     
     return {
-        "status": "healthy" if db_status else "degraded",
-        "database": "connected" if db_status else "disconnected",
+        "status": status,
+        "data_files": {
+            "sales": "available" if sales_ok else "missing",
+            "forecast": "available" if forecast_ok else "missing",
+            "reorders": "available" if reorders_ok else "missing"
+        },
         "timestamp": datetime.now().isoformat()
     }
 

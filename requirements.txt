@@ -2,9 +2,7 @@
 pandas>=2.0.0
 numpy>=1.24.0
 
-# Database
-psycopg2-binary>=2.9.0
-sqlalchemy>=2.0.0
+# Data Storage (CSV-based)
 
 # ML Models
 prophet>=1.1.0

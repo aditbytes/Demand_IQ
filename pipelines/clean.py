@@ -1,13 +1,11 @@
 """
 Data Cleaning Pipeline
-Transforms raw M5 data into cleaned format and loads into PostgreSQL
+Transforms raw M5 data into cleaned format and saves to CSV
 """
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import sys
-sys.path.append(str(Path(__file__).parent.parent))
-from db.db_utils import get_engine
+
 
 def load_raw_data():
     """Load raw M5 datasets"""
@@ -40,8 +38,14 @@ def transform_sales_data(sales_df, calendar_df, prices_df):
     print(f"  Sales long format shape: {sales_long.shape}")
     
     # Merge with calendar to get actual dates
+    calendar_cols = ['d', 'date']
+    if 'event_name_1' in calendar_df.columns:
+        calendar_cols.append('event_name_1')
+    if 'wm_yr_wk' in calendar_df.columns:
+        calendar_cols.append('wm_yr_wk')
+    
     sales_long = sales_long.merge(
-        calendar_df[['d', 'date', 'event_name_1', 'snap_CA', 'snap_TX', 'snap_WI']],
+        calendar_df[calendar_cols],
         on='d',
         how='left'
     )
@@ -49,27 +53,21 @@ def transform_sales_data(sales_df, calendar_df, prices_df):
     # Create SKU (Stock Keeping Unit) from item_id
     sales_long['sku'] = sales_long['item_id']
     
-    # Merge with prices
-    sales_long = sales_long.merge(
-        prices_df,
-        on=['store_id', 'item_id', 'wm_yr_wk'],
-        how='left'
-    ) if 'wm_yr_wk' in calendar_df.columns else sales_long
-    
-    # For simplicity, merge prices based on store_id and item_id only
-    # (In production, would need proper week matching)
+    # Merge with prices using average price per store-item
     price_avg = prices_df.groupby(['store_id', 'item_id'])['sell_price'].mean().reset_index()
     price_avg.columns = ['store_id', 'item_id', 'price']
     
     sales_long = sales_long.merge(
         price_avg,
-        left_on=['store_id', 'item_id'],
-        right_on=['store_id', 'item_id'],
+        on=['store_id', 'item_id'],
         how='left'
     )
     
     # Create promo flag (if event exists)
-    sales_long['promo'] = sales_long['event_name_1'].notna()
+    if 'event_name_1' in sales_long.columns:
+        sales_long['promo'] = sales_long['event_name_1'].notna()
+    else:
+        sales_long['promo'] = False
     
     # Select final columns
     final_df = sales_long[['date', 'store_id', 'sku', 'units', 'price', 'promo']].copy()
@@ -86,26 +84,6 @@ def transform_sales_data(sales_df, calendar_df, prices_df):
     
     return final_df
 
-def load_to_database(df, table_name='sales', batch_size=10000):
-    """Load cleaned data to PostgreSQL"""
-    print(f"\nLoading data to PostgreSQL table '{table_name}'...")
-    
-    engine = get_engine()
-    
-    # Load in batches
-    total_rows = len(df)
-    for i in range(0, total_rows, batch_size):
-        batch = df.iloc[i:i+batch_size]
-        batch.to_sql(
-            table_name,
-            engine,
-            if_exists='append' if i > 0 else 'replace',
-            index=False,
-            method='multi'
-        )
-        print(f"  Loaded {min(i+batch_size, total_rows):,} / {total_rows:,} rows")
-    
-    print(f"✓ Successfully loaded {total_rows:,} rows to '{table_name}' table")
 
 def clean_data():
     """Main cleaning pipeline"""
@@ -126,9 +104,6 @@ def clean_data():
     output_path = processed_dir / 'sales_cleaned.csv'
     cleaned_df.to_csv(output_path, index=False)
     print(f"\n✓ Saved cleaned data to: {output_path}")
-    
-    # Load to database
-    load_to_database(cleaned_df, table_name='sales')
     
     print("\n" + "=" * 60)
     print("✓ Data cleaning complete!")

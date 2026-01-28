@@ -1,0 +1,4 @@
+2026-01-28 22:40:23 | INFO | REORDER | Store: STORE-001 | SKU: SKU-MILK-001 | Qty: 150 | Risk: HIGH | Current Stock: 50 | Forecast: 180
+2026-01-28 22:40:24 | INFO | Message sent successfully | Message ID: 4
+2026-01-28 22:58:41 | INFO | REORDER | Store: STORE-001 | SKU: SKU-MILK-001 | Qty: 261 | Risk: MED | Current Stock: 305 | Forecast: 472
+2026-01-28 22:58:42 | INFO | Message sent successfully | Message ID: 5

@@ -5,23 +5,22 @@ Creates lag features, rolling statistics, and calendar features for ML models
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import sys
-sys.path.append(str(Path(__file__).parent.parent))
-from db.db_utils import get_engine
 
-def load_sales_from_db():
-    """Load cleaned sales data from database"""
-    print("Loading sales data from database...")
-    engine = get_engine()
+
+def load_sales_from_csv():
+    """Load cleaned sales data from CSV"""
+    print("Loading sales data from CSV...")
     
-    query = """
-    SELECT date, store_id, sku, units, price, promo
-    FROM sales
-    ORDER BY store_id, sku, date
-    """
+    csv_path = Path('data/processed/sales_cleaned.csv')
     
-    df = pd.read_sql(query, engine)
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Sales data not found at {csv_path}. Run clean.py first.")
+    
+    df = pd.read_csv(csv_path)
     df['date'] = pd.to_datetime(df['date'])
+    
+    # Sort for proper lag/rolling calculations
+    df = df.sort_values(['store_id', 'sku', 'date'])
     
     print(f"  Loaded {len(df):,} sales records")
     return df
@@ -94,8 +93,8 @@ def engineer_features():
     print("DemandIQ - Feature Engineering Pipeline")
     print("=" * 60)
     
-    # Load sales data
-    df = load_sales_from_db()
+    # Load sales data from CSV
+    df = load_sales_from_csv()
     
     # Create lag features
     df = create_lag_features(df, lag_days=[7, 14, 28])
@@ -114,9 +113,9 @@ def engineer_features():
     df_features = df.dropna(subset=['lag7', 'lag14'])
     print(f"Rows after dropping NaN: {len(df_features):,}")
     
-    # Select feature columns for database
+    # Select feature columns
     feature_cols = [
-        'date', 'store_id', 'sku',
+        'date', 'store_id', 'sku', 'units',
         'lag7', 'lag14', 'lag28',
         'rolling7_mean', 'rolling7_std',
         'rolling30_mean', 'rolling30_std',
@@ -126,33 +125,13 @@ def engineer_features():
     
     df_final = df_features[feature_cols].copy()
     
-    # Save to local file
+    # Save to CSV file
     features_dir = Path('data/features')
     features_dir.mkdir(parents=True, exist_ok=True)
     
     output_path = features_dir / 'features.csv'
     df_final.to_csv(output_path, index=False)
     print(f"\n✓ Saved features to: {output_path}")
-    
-    # Load to database
-    print("\nLoading features to database...")
-    engine = get_engine()
-    
-    batch_size = 10000
-    total_rows = len(df_final)
-    
-    for i in range(0, total_rows, batch_size):
-        batch = df_final.iloc[i:i+batch_size]
-        batch.to_sql(
-            'features',
-            engine,
-            if_exists='append' if i > 0 else 'replace',
-            index=False,
-            method='multi'
-        )
-        print(f"  Loaded {min(i+batch_size, total_rows):,} / {total_rows:,} rows")
-    
-    print(f"✓ Successfully loaded {total_rows:,} rows to 'features' table")
     
     print("\n" + "=" * 60)
     print("✓ Feature engineering complete!")

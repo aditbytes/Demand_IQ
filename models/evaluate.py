@@ -5,9 +5,18 @@ Compares baseline, Prophet, and XGBoost to select best model per SKU
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import sys
-sys.path.append(str(Path(__file__).parent.parent))
-from db.db_utils import get_engine
+
+
+def load_sales_data():
+    """Load sales data from CSV"""
+    csv_path = Path('data/processed/sales_cleaned.csv')
+    
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Sales data not found at {csv_path}. Run clean.py first.")
+    
+    df = pd.read_csv(csv_path)
+    df['date'] = pd.to_datetime(df['date'])
+    return df
 
 def baseline_forecast(df, store_id, sku):
     """Baseline model: last week's sales = this week's forecast"""
@@ -74,13 +83,15 @@ def evaluate_and_select():
     print("DemandIQ - Model Evaluation & Selection")
     print("=" * 60)
     
-    # Load sales data
-    engine = get_engine()
-    df = pd.read_sql("SELECT date, store_id, sku, units FROM sales", engine)
-    df['date'] = pd.to_datetime(df['date'])
+    # Load sales data from CSV
+    df = load_sales_data()
     
     # Load Prophet and XGBoost results
     model_results = load_model_results()
+    
+    if len(model_results) == 0:
+        print("\n✗ No model results found. Run train_prophet.py and train_xgboost.py first.")
+        return
     
     print(f"\nEvaluating models for {len(model_results)} store-SKU combinations...")
     

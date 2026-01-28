@@ -1,0 +1,11 @@
+store_id,sku,model_type,mae,model_path
+CA_1,HOBBIES_2_005,prophet,9.287917353695923,models/saved/prophet/CA_1_HOBBIES_2_005_prophet.pkl
+CA_1,HOUSEHOLD_3_010,prophet,8.763136805228255,models/saved/prophet/CA_1_HOUSEHOLD_3_010_prophet.pkl
+CA_2,FOODS_1_009,prophet,7.887679833794982,models/saved/prophet/CA_2_FOODS_1_009_prophet.pkl
+TX_1,FOODS_1_002,prophet,7.842967727033497,models/saved/prophet/TX_1_FOODS_1_002_prophet.pkl
+TX_1,HOBBIES_2_005,prophet,7.973889778104274,models/saved/prophet/TX_1_HOBBIES_2_005_prophet.pkl
+TX_1,HOBBIES_2_006,prophet,8.690749951044273,models/saved/prophet/TX_1_HOBBIES_2_006_prophet.pkl
+TX_2,HOUSEHOLD_3_002,prophet,9.348449943733614,models/saved/prophet/TX_2_HOUSEHOLD_3_002_prophet.pkl
+TX_2,HOUSEHOLD_3_007,prophet,8.35954674412779,models/saved/prophet/TX_2_HOUSEHOLD_3_007_prophet.pkl
+WI_1,FOODS_1_004,prophet,9.714465350111576,models/saved/prophet/WI_1_FOODS_1_004_prophet.pkl
+WI_1,HOBBIES_2_003,prophet,8.756546197070636,models/saved/prophet/WI_1_HOBBIES_2_003_prophet.pkl

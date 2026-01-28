@@ -31,7 +31,7 @@ Raw CSV (Walmart M5)
         ↓
 Data Ingestion (Python)
         ↓
-PostgreSQL Feature Store
+CSV Feature Store
         ↓
 ML Forecasting Models
         ↓
@@ -49,7 +49,7 @@ Web Dashboard
 | Layer | Technology |
 |-------|------------|
 | **Data** | Pandas, NumPy |
-| **Database** | PostgreSQL |
+| **Storage** | CSV files |
 | **ML Models** | Prophet, XGBoost |
 | **API** | FastAPI |
 | **Dashboard** | Streamlit |
@@ -65,7 +65,7 @@ Web Dashboard
 DemandIQ/
 ├── data/
 │   ├── raw/              # Original M5 datasets
-│   ├── processed/        # Cleaned data
+│   ├── processed/        # Cleaned data (CSV)
 │   └── features/         # Engineered features
 ├── pipelines/
 │   ├── ingest.py         # Data ingestion
@@ -82,9 +82,6 @@ DemandIQ/
 │   └── main.py           # FastAPI application
 ├── dashboard/
 │   └── app.py            # Streamlit dashboard
-├── db/
-│   ├── schema.sql        # PostgreSQL schema
-│   └── db_utils.py       # Database utilities
 ├── requirements.txt
 └── README.md
 ```
@@ -96,7 +93,6 @@ DemandIQ/
 ### 1. Prerequisites
 
 - Python 3.9+
-- PostgreSQL 12+
 - 4GB+ RAM
 
 ### 2. Installation
@@ -114,34 +110,20 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Database Setup
-
-```bash
-# Create database
-createdb demandiq
-
-# Run schema
-psql -d demandiq -f db/schema.sql
-
-# Copy environment file
-cp .env.example .env
-# Edit .env with your database credentials
-```
-
-### 4. Run Data Pipelines
+### 3. Run Data Pipelines
 
 ```bash
 # Step 1: Ingest raw data
 python pipelines/ingest.py
 
-# Step 2: Clean and load to database
+# Step 2: Clean and save to CSV
 python pipelines/clean.py
 
 # Step 3: Engineer features
 python pipelines/feature_engineering.py
 ```
 
-### 5. Train Models
+### 4. Train Models
 
 ```bash
 # Train Prophet models (on subset for speed)
@@ -158,7 +140,7 @@ mlflow ui
 # Open: http://localhost:5000
 ```
 
-### 6. Generate Inventory Recommendations
+### 5. Generate Inventory Recommendations
 
 ```bash
 # Calculate safety stocks
@@ -168,7 +150,7 @@ python inventory/safety_stock.py
 python inventory/reorder.py
 ```
 
-### 7. Launch API
+### 6. Launch API
 
 ```bash
 # Start FastAPI server
@@ -178,7 +160,7 @@ uvicorn api.main:app --reload
 # Auto-generated docs: http://localhost:8000/docs
 ```
 
-### 8. Launch Dashboard
+### 7. Launch Dashboard
 
 ```bash
 # Start Streamlit dashboard
@@ -189,25 +171,24 @@ streamlit run dashboard/app.py
 
 ---
 
-## 📊 Database Schema
+## 📊 Data Storage
 
-### Core Tables
+### CSV Files
 
-**sales** - Historical sales transactions
+All data is stored in CSV format in the `data/` directory:
+
+**sales_cleaned.csv** - Historical sales transactions
 - `date`, `store_id`, `sku`, `units`, `price`, `promo`
 
-**features** - Engineered ML features
+**features.csv** - Engineered ML features
 - Lag features: `lag7`, `lag14`, `lag28`
 - Rolling stats: `rolling7_mean`, `rolling30_mean`
 - Calendar: `day_of_week`, `month`, `is_holiday`
 
-**forecast** - Model predictions
+**forecast.csv** - Model predictions
 - `forecast_date`, `store_id`, `sku`, `predicted_demand`
 
-**inventory** - Current stock levels
-- `store_id`, `sku`, `current_stock`, `lead_time`
-
-**reorders** - Reorder recommendations
+**reorders.csv** - Reorder recommendations
 - `store_id`, `sku`, `order_qty`, `risk_level`
 
 ---
@@ -355,8 +336,8 @@ python pipelines/ingest.py
 python pipelines/clean.py
 python pipelines/feature_engineering.py
 
-# Verify database tables
-psql -d demandiq -c "SELECT COUNT(*) FROM sales;"
+# Verify CSV files created
+ls -la data/processed/
 ```
 
 ### Model Test
@@ -394,7 +375,6 @@ streamlit run dashboard/app.py
 
 This project uses **industry-standard** technologies that FAANG companies use in production:
 
-- **PostgreSQL**: Scalable relational database (used by Instagram, Spotify)
 - **FastAPI**: Modern, fast API framework (used by Uber, Netflix)
 - **Prophet**: Battle-tested forecasting (developed by Facebook)
 - **XGBoost**: SOTA gradient boosting (Kaggle competition winner)
@@ -414,6 +394,7 @@ This project uses **industry-standard** technologies that FAANG companies use in
 - [ ] Mobile app for store managers
 - [ ] Advanced models (LSTM, Transformers)
 - [ ] Multi-objective optimization (cost vs. service level)
+- [ ] Database integration (PostgreSQL/MySQL) for production scale
 
 ---
 
