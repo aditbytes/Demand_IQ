@@ -9,7 +9,7 @@ from prophet import Prophet
 import pickle
 import mlflow
 import mlflow.sklearn
-
+import matplotlib.pyplot as plt
 
 def load_training_data(limit_skus=None):
     """Load data for model training from CSV"""
@@ -62,7 +62,18 @@ def train_prophet_model(df, store_id, sku):
     # Make 7-day forecast
     future = model.make_future_dataframe(periods=7)
     forecast = model.predict(future)
-    
+
+    if store_id ==df['store_id'].iloc[0] and sku ==
+    df['sku'].iloc[0]:
+        fig = model.plot(forecast)
+        plt.title(f"Prophet Forecast: {store_id} - {sku}")
+        plt.xlabel("Date")
+        plt.ylabel("Demand")
+        plt.savefig("prophet_forecast.png")
+        fig2 = model.plot_components(forecast)
+        plt.savefig("prophet_components.png")
+        plt.close('all')
+        
     # Get forecast for next 7 days
     forecast_7d = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(7)
     
