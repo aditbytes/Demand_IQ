@@ -559,29 +559,194 @@ def main():
     # Demo mode banner
     if DEMO_MODE:
         st.markdown('<div class="demo-banner">🎯 <strong>DEMO MODE</strong> - 10 Stores • 22 Products • 180-Day History</div>', unsafe_allow_html=True)
-    
-    # Summary metrics row
-    metrics = get_summary_metrics()
-    
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    with col1:
-        st.metric("🏪 Stores", metrics['total_stores'])
-    with col2:
-        st.metric("📦 Products", metrics['total_skus'])
-    with col3:
-        st.metric("🔴 High Risk", metrics['high_risk'])
-    with col4:
-        st.metric("🟡 Medium Risk", metrics['med_risk'])
-    with col5:
-        st.metric("📋 To Reorder", metrics['items_to_reorder'])
-    with col6:
-        st.metric("💰 Order Value", f"${metrics['total_order_value']:,.0f}")
-    
+
+    # Navigation (multi-page style)
+    page = st.sidebar.radio(
+        "📑 Select Page",
+        ["Dashboard", "SKU Analysis", "Store Overview", "Analytics", "Full Inventory"],
+        index=0
+    )
+
+    if page == "Dashboard":
+        metrics = get_summary_metrics()
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
+        col1.metric("🏪 Stores", metrics['total_stores'])
+        col2.metric("📦 Products", metrics['total_skus'])
+        col3.metric("🔴 High Risk", metrics['high_risk'])
+        col4.metric("🟡 Medium Risk", metrics['med_risk'])
+        col5.metric("📋 To Reorder", metrics['items_to_reorder'])
+        col6.metric("💰 Order Value", f"${metrics['total_order_value']:,.0f}")
+
+        st.markdown("---")
+
+        st.subheader("📊 Summary Charts")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.plotly_chart(create_category_breakdown_chart(), use_container_width=True)
+        with c2:
+            st.plotly_chart(create_risk_distribution_chart(), use_container_width=True)
+        with c3:
+            st.plotly_chart(create_regional_chart(), use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("🔍 High Priority Reorder Items")
+        inventory_df = load_all_inventory()
+        top_reorder = inventory_df.nlargest(10, 'order_value')[['store_name', 'product_name', 'order_qty', 'order_value', 'risk_level']]
+        top_reorder.columns = ['Store', 'Product', 'Order Qty', 'Order Value', 'Risk']
+        st.dataframe(top_reorder.style.format({'Order Value': '${:,.2f}'}), use_container_width=True, height=320)
+
+    elif page == "SKU Analysis":
+        # existing SKU Analysis logic and sidebar filters
+        with st.sidebar:
+            st.header("🔍 Filters")
+            stores = load_stores()
+            store_options = [f"{s} - {STORE_INFO[s]['name']}" for s in stores]
+            selected_store_option = st.selectbox("Select Store", store_options)
+            selected_store = selected_store_option.split(" - ")[0]
+
+            store_info = load_store_info(selected_store)
+            st.caption(f"📍 Region: {store_info.get('region', 'N/A')}")
+            st.caption(f"🏬 Type: {store_info.get('type', 'N/A')}")
+            st.caption(f"📏 Size: {store_info.get('size', 'N/A')}")
+            st.markdown("---")
+
+            skus = load_skus(selected_store)
+            sku_options = [f"{s} - {PRODUCT_CATALOG.get(s, {}).get('name', s)}" for s in skus]
+            selected_sku_option = st.selectbox("Select Product", sku_options)
+            selected_sku = selected_sku_option.split(" - ")[0]
+
+            product_info = load_product_info(selected_sku)
+            if product_info:
+                cat_color = get_category_color(product_info.get('category', ''))
+                st.markdown(f"<span style='background-color: {cat_color}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem;'>{product_info.get('category', 'N/A')}</span>", unsafe_allow_html=True)
+                st.caption(f"💵 Price: ${product_info.get('unit_price', 0):.2f}")
+                st.caption(f"🚚 Lead Time: {product_info.get('lead_time', 'N/A')} days")
+                st.caption(f"🏭 Supplier: {product_info.get('supplier', 'N/A')}")
+
+            st.markdown("---")
+            st.subheader("⚠️ Alert Filters")
+            risk_filter = st.multiselect("Risk Level", ["HIGH", "MED", "LOW"], default=["HIGH", "MED"])
+
+        if selected_store and selected_sku:
+            sales_df = load_sales_history(selected_store, selected_sku, days=180)
+            forecast_df = load_forecast(selected_store, selected_sku, days=14)
+            reorder_info = load_reorder_info(selected_store, selected_sku)
+
+            c1, c2, c3, c4, c5, c6 = st.columns(6)
+            c1.metric("📦 Current Stock", f"{int(reorder_info['current_stock']):,}")
+            c2.metric("📈 7-Day Forecast", f"{reorder_info['forecasted_demand']:.0f}")
+            c3.metric("🛡️ Safety Stock", f"{reorder_info['safety_stock']:.0f}")
+            c4.metric("📅 Days of Stock", f"{reorder_info['days_of_stock']:.1f}")
+            c5.metric("🛒 Order Qty", f"{int(reorder_info['order_qty']):,}")
+            c6.metric("💰 Order Value", f"${reorder_info['order_value']:,.2f}")
+
+            st.markdown("---")
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                st.plotly_chart(create_sales_history_chart(sales_df, forecast_df), use_container_width=True)
+            with c2:
+                st.subheader("📋 Reorder Recommendation")
+                st.markdown(get_risk_badge(reorder_info['risk_level']), unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown(f"**🚚 Supplier:** {reorder_info['supplier']}")
+                st.markdown(f"**⏱️ Lead Time:** {reorder_info['lead_time']} days")
+                st.markdown(f"**📊 Profit Margin:** {reorder_info['profit_margin']}%")
+                st.markdown(f"**💵 Potential Revenue:** ${reorder_info['potential_revenue']:,.2f}")
+                st.markdown("---")
+
+                if reorder_info['order_qty'] > 0:
+                    if st.button(f"📦 Order {int(reorder_info['order_qty']):,} Units", type="primary", key="order_btn"):
+                        result = send_reorder_notification(
+                            store_id=selected_store,
+                            sku=selected_sku,
+                            order_qty=int(reorder_info['order_qty']),
+                            current_stock=int(reorder_info['current_stock']),
+                            forecasted_demand=reorder_info['forecasted_demand'],
+                            risk_level=reorder_info['risk_level'],
+                            safety_stock=reorder_info['safety_stock']
+                        )
+                        if result['success']:
+                            st.success("✅ Reorder placed! Telegram notification sent.")
+                        else:
+                            st.warning(f"⚠️ Reorder placed, but notification failed: {result['error']}")
+                else:
+                    st.success("✅ Stock levels adequate")
+
+                st.download_button(
+                    label="📥 Download Forecast",
+                    data=forecast_df.to_csv(index=False),
+                    file_name=f"forecast_{selected_store}_{selected_sku}.csv",
+                    mime="text/csv"
+                )
+
+            st.markdown("---")
+            st.subheader(f"⚠️ At-Risk Products - {STORE_INFO[selected_store]['name']}")
+            inventory_df = load_all_inventory()
+            alerts_df = inventory_df[(inventory_df['store_id'] == selected_store) & (inventory_df['risk_level'].isin(risk_filter))]
+
+            if len(alerts_df) > 0:
+                display_df = alerts_df[['product_name', 'category', 'current_stock', 'forecasted_demand', 'days_of_stock', 'order_qty', 'order_value', 'risk_level']].copy()
+                display_df.columns = ['Product', 'Category', 'Stock', 'Forecast', 'Days Left', 'Order Qty', 'Order Value', 'Risk']
+
+                def highlight_risk(row):
+                    if row['Risk'] == 'HIGH':
+                        return ['background-color: #ffcccc'] * len(row)
+                    elif row['Risk'] == 'MED':
+                        return ['background-color: #fff4cc'] * len(row)
+                    return [''] * len(row)
+
+                styled_df = display_df.style.apply(highlight_risk, axis=1).format({'Order Value': '${:,.2f}', 'Days Left': '{:.1f}'})
+                st.dataframe(styled_df, use_container_width=True, height=300)
+            else:
+                st.success("✅ No products at risk in selected filters!")
+
+    elif page == "Store Overview":
+        st.subheader("🏪 Store Performance Overview")
+        inventory_df = load_all_inventory()
+        store_summary = inventory_df.groupby(['store_id', 'store_name', 'region']).agg({'sku': 'count', 'current_stock': 'sum', 'order_qty': 'sum', 'order_value': 'sum', 'risk_level': lambda x: (x == 'HIGH').sum()}).reset_index()
+        store_summary.columns = ['Store ID', 'Store Name', 'Region', 'SKUs', 'Total Stock', 'Total Order Qty', 'Order Value', 'High Risk Items']
+        st.dataframe(store_summary.style.format({'Order Value': '${:,.2f}', 'Total Stock': '{:,.0f}', 'Total Order Qty': '{:,.0f}'}), use_container_width=True, height=400)
+        st.download_button(label="📥 Download Store Summary", data=store_summary.to_csv(index=False), file_name="store_summary.csv", mime="text/csv")
+
+    elif page == "Analytics":
+        st.subheader("📈 Inventory Analytics")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(create_category_breakdown_chart(), use_container_width=True)
+        with c2:
+            st.plotly_chart(create_risk_distribution_chart(), use_container_width=True)
+        st.markdown("---")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(create_regional_chart(), use_container_width=True)
+        with c2:
+            inventory_df = load_all_inventory()
+            top_reorder = inventory_df.nlargest(10, 'order_value')[['product_name', 'store_name', 'order_qty', 'order_value', 'risk_level']]
+            top_reorder.columns = ['Product', 'Store', 'Order Qty', 'Order Value', 'Risk']
+            st.markdown("**🔝 Top 10 Products by Order Value**")
+            st.dataframe(top_reorder.style.format({'Order Value': '${:,.2f}'}), use_container_width=True, height=350)
+
+    elif page == "Full Inventory":
+        st.subheader("📋 Complete Inventory Status")
+        inventory_df = load_all_inventory()
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            region_filter = st.multiselect("Filter by Region", inventory_df['region'].unique().tolist(), default=inventory_df['region'].unique().tolist())
+        with c2:
+            category_filter = st.multiselect("Filter by Category", inventory_df['category'].unique().tolist(), default=inventory_df['category'].unique().tolist())
+        with c3:
+            risk_filter_full = st.multiselect("Filter by Risk", ['HIGH', 'MED', 'LOW'], default=['HIGH', 'MED', 'LOW'])
+
+        filtered_df = inventory_df[(inventory_df['region'].isin(region_filter)) & (inventory_df['category'].isin(category_filter)) & (inventory_df['risk_level'].isin(risk_filter_full))]
+        display_cols = ['store_name', 'region', 'product_name', 'category', 'current_stock', 'forecasted_demand', 'days_of_stock', 'order_qty', 'order_value', 'risk_level']
+        st.dataframe(filtered_df[display_cols].rename(columns={'store_name': 'Store', 'region': 'Region', 'product_name': 'Product', 'category': 'Category', 'current_stock': 'Stock', 'forecasted_demand': 'Forecast', 'days_of_stock': 'Days Left', 'order_qty': 'Order Qty', 'order_value': 'Order Value', 'risk_level': 'Risk'}).style.format({'Order Value': '${:,.2f}', 'Days Left': '{:.1f}'}), use_container_width=True, height=500)
+        st.download_button(label="📥 Download Full Inventory", data=filtered_df.to_csv(index=False), file_name="full_inventory.csv", mime="text/csv")
+
+    # Footer
     st.markdown("---")
-    
-    # Tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 SKU Analysis", "🏪 Store Overview", "📈 Analytics", "📋 Full Inventory"])
-    
+    st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | DemandIQ v2.0")
+    return
+
     # ============================================================
     # TAB 1: SKU Analysis
     # ============================================================
@@ -734,7 +899,10 @@ def main():
                 st.dataframe(styled_df, use_container_width=True, height=300)
             else:
                 st.success("✅ No products at risk in selected filters!")
-    
+
+    # STOP: multipage version already done; skip old tabbed block
+    return
+
     # ============================================================
     # TAB 2: Store Overview
     # ============================================================
