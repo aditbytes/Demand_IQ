@@ -85,29 +85,31 @@ def transform_sales_data(sales_df, calendar_df, prices_df):
     return final_df
 
 
-def clean_data():
-    """Main cleaning pipeline"""
+def clean_data(df=None):
     print("=" * 60)
     print("DemandIQ - Data Cleaning Pipeline")
     print("=" * 60)
-    
-    # Load raw data
-    sales_df, calendar_df, prices_df = load_raw_data()
-    
-    # Transform to cleaned format
-    cleaned_df = transform_sales_data(sales_df, calendar_df, prices_df)
-    
-    # Save processed data locally
+
+    if df is None:
+        sales_df, calendar_df, prices_df = load_raw_data()
+        cleaned_df = transform_sales_data(
+            sales_df,
+            calendar_df,
+            prices_df
+        )
+    else:
+        cleaned_df = df.copy()
+
     processed_dir = Path('data/processed')
     processed_dir.mkdir(parents=True, exist_ok=True)
-    
+
     output_path = processed_dir / 'sales_cleaned.csv'
     cleaned_df.to_csv(output_path, index=False)
+
     print(f"\n✓ Saved cleaned data to: {output_path}")
-    
+
     print("\n" + "=" * 60)
     print("✓ Data cleaning complete!")
     print("=" * 60)
 
-if __name__ == '__main__':
-    clean_data()
+    return cleaned_df
