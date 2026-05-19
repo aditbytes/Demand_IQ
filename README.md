@@ -398,6 +398,37 @@ This project uses **industry-standard** technologies that FAANG companies use in
 
 ---
 
+## 👥 Contributors
+
+---
+
+### 🗄️ Alok — Data Engineering
+Designed and implemented the retail data ingestion and preprocessing pipeline using Walmart M5-style synthetic data generation. Built raw data transformation (wide-to-long conversion), calendar and pricing data integration, cleaning workflows, and processed dataset export for downstream analytics.
+
+---
+
+### 🤖 Aditya — Model Training
+Designed dual-model forecasting framework using Prophet and XGBoost.
+Conducted hyperparameter tuning and MLflow experiment tracking.
+
+---
+
+### 📊 Abhimanyu — Dashboard Development
+Built Streamlit dashboard with Plotly visualizations for sales history,
+forecasts, and inventory risk classification.
+
+---
+
+### 🌐 Ankita — API Development
+Developed FastAPI backend with RESTful endpoints, CORS middleware, and Pydantic validation.
+
+---
+
+### ⚙️ Surbhit — Feature Engineering & Pipeline Orchestration
+Developed temporal feature engineering modules including lag features, rolling statistics, price-based transformations, and calendar-driven feature extraction to create ML-ready datasets for forecasting models.
+
+---
+
 ## 👨‍💻 Author
 
 Built with FAANG-level engineering standards

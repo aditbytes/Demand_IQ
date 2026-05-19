@@ -123,7 +123,7 @@ def engineer_features():
         'day_of_week', 'month', 'is_holiday', 'is_snap'
     ]
     
-    df_final = df_features[feature_cols].copy()
+    df_final = df[feature_cols].copy()
     
     # Save to CSV file
     features_dir = Path('data/features')
@@ -141,3 +141,42 @@ def engineer_features():
 
 if __name__ == '__main__':
     engineer_features()
+
+def create_features(df):
+    """Wrapper for run_pipeline.py"""
+    print("=" * 60)
+    print("DemandIQ - Feature Engineering Pipeline")
+    print("=" * 60)
+
+    df = df.sort_values(['store_id', 'sku', 'date']).copy()
+    print(f"  Loaded {len(df):,} sales records")
+
+    df = create_lag_features(df, lag_days=[7, 14, 28])
+    df = create_rolling_features(df, windows=[7, 30])
+    df = create_price_features(df)
+    df = create_calendar_features(df)
+
+    print(f"\nRows before dropping NaN: {len(df):,}")
+    df = df.dropna(subset=['lag7', 'lag14']).reset_index(drop=True)
+    print(f"Rows after dropping NaN: {len(df):,}")
+
+    feature_cols = [
+        'date', 'store_id', 'sku', 'units',
+        'lag7', 'lag14', 'lag28',
+        'rolling7_mean', 'rolling7_std',
+        'rolling30_mean', 'rolling30_std',
+        'price', 'price_change', 'promo',
+        'day_of_week', 'month', 'is_holiday', 'is_snap'
+    ]
+
+    df_final = df[feature_cols].copy()
+
+    features_dir = Path('data/features')
+    features_dir.mkdir(parents=True, exist_ok=True)
+    df_final.to_csv(features_dir / 'features.csv', index=False)
+    print(f"\n✓ Saved features to: data/features/features.csv")
+    print("=" * 60)
+    print("✓ Feature engineering complete!")
+    print("=" * 60)
+
+    return df_final

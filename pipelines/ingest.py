@@ -142,3 +142,55 @@ def ingest_data():
 
 if __name__ == '__main__':
     ingest_data()
+
+def generate_raw_data():
+    """Returns long-format DataFrame for run_pipeline.py"""
+    
+    # Pehle raw files generate karo
+    generate_sample_data()
+    
+    # Load karo
+    sales_df    = pd.read_csv('data/raw/sales.csv')
+    calendar_df = pd.read_csv('data/raw/calendar.csv')
+    prices_df   = pd.read_csv('data/raw/prices.csv')
+    
+    # Wide to Long
+    id_cols = ['id','item_id','dept_id','cat_id','store_id','state_id']
+    sales_long = sales_df.melt(
+        id_vars=id_cols,
+        var_name='d',
+        value_name='units'
+    )
+    
+    # Calendar merge
+    sales_long = sales_long.merge(
+        calendar_df[['d','date','event_name_1']],
+        on='d', how='left'
+    )
+    
+    # Price merge
+    price_avg = prices_df.groupby(
+        ['store_id','item_id']
+    )['sell_price'].mean().reset_index()
+    price_avg.columns = ['store_id','item_id','price']
+    
+    sales_long = sales_long.merge(
+        price_avg,
+        on=['store_id','item_id'],
+        how='left'
+    )
+    
+    # Rename + clean
+    sales_long = sales_long.rename(columns={
+        'item_id'     : 'sku',
+        'event_name_1': 'event'
+    })
+    sales_long['promo'] = sales_long['event'].notna().astype(int)
+    sales_long['date']  = pd.to_datetime(sales_long['date'])
+    
+    final = sales_long[[
+        'date','store_id','sku','units','price','promo'
+    ]].copy()
+    
+    print(f"Raw data shape: {final.shape}")
+    return final
